@@ -903,7 +903,7 @@ def map_with_predict(sample_id):  # use fitted surface
 #                h_err.append(perr[0])
 
                 db.cur.execute(f"""REPLACE  INTO {c.FIRST_MAP_TABLE}
-                    {c.COL_MEMBER_FILE_NAME}, {c.COL_SAMPLE_ID}, {c.COL_XPOS}, {c.COL_YPOS}, {c.COL_HPAA},  {c.COL_HERR}, {c.COL_RNORM}, {c.COL_RNERR},
+                    ({c.COL_MEMBER_FILE_NAME}, {c.COL_SAMPLE_ID}, {c.COL_XPOS}, {c.COL_YPOS}, {c.COL_HPAA},  {c.COL_HERR}, {c.COL_RNORM}, {c.COL_RNERR})
                    VALUES (?,?,?,?,?,?,?,?)
                     """, [specfilename, sample_id, x, y, popt[0], perr[0], popt[1], perr[1]])
                 if db.cur.rowcount != 1:
