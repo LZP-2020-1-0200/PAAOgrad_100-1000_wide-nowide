@@ -5,7 +5,9 @@ if __name__ == "__main__":
 
 FILE_TABLE = 'files'
 FIRST_FIT_TABLE = 'first_fit'
+SECOND_FIT_TABLE = 'second_fit'
 FIRST_MAP_TABLE = 'first_map'
+SECOND_MAP_TABLE = 'second_map'
 
 SAMPLES_TABLE = 'samples'
 TYPES_TABLE = 'file_types'
