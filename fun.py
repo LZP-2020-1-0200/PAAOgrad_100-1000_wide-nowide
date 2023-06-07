@@ -9,6 +9,9 @@ import re
 from matplotlib import pyplot as plt
 from scipy.optimize import curve_fit
 from subprocess import check_output
+#from PIL import Image
+import matplotlib.image as mpimg
+import json
 
 if __name__ == "__main__":
     m.main()
@@ -493,13 +496,13 @@ def map(sample_id):  # first +++++++++++++++++++++++++++++++++++++++++++++++
 #    print(ypositions)
 
 firstarea_pirmais_drusku_slikts = {'PAAOgrad_100-1000_no_wide': {'x': [48200, 54800], 'y': [-56600, -54800]},
-             'PAAOgrad_100-1000_wide': {'x': [47500, 55500], 'y': [-59300, -57400]}}
+                                   'PAAOgrad_100-1000_wide': {'x': [47500, 55500], 'y': [-59300, -57400]}}
 
 firstarea = {'PAAOgrad_100-1000_no_wide': {'x': [47500, 54800], 'y': [-58400, -57100]},
              'PAAOgrad_100-1000_wide': {'x': [47500, 55500], 'y': [-59300, -57400]}}
 
-secondarea = {'PAAOgrad_100-1000_no_wide': {'x': [47500, 54800], 'y': [-58200, -56200]},
-             'PAAOgrad_100-1000_wide': {'x': [47500, 55500], 'y': [-61000, -57400]}}
+secondarea = {'PAAOgrad_100-1000_no_wide': {'x': [47500, 54800], 'y': [-60800, -58600]},
+              'PAAOgrad_100-1000_wide': {'x': [47500, 55500], 'y': [-61000, -57400]}}
 
 
 def plot_map3D(sample_id):
@@ -734,7 +737,8 @@ def fit_area(sample_id):
 
 
 nal2o3 = {'PAAOgrad_100-1000_no_wide': 1.8,
-             'PAAOgrad_100-1000_wide': 1.6}
+          'PAAOgrad_100-1000_wide': 1.6}
+
 
 def map_with_predict(sample_id):  # use fitted surface
     global ntilde
@@ -873,9 +877,9 @@ def map_with_predict(sample_id):  # use fitted surface
     db.cur.execute(f"""SELECT   {c.COL_A},{c.COL_B},{c.COL_C}
             FROM {c.FIRST_FIT_TABLE}
             WHERE {c.COL_SAMPLE_ID} = ?
-            """,[sample_id])
-    abc=db.cur.fetchone()
-    print (abc)
+            """, [sample_id])
+    abc = db.cur.fetchone()
+    print(abc)
 
     for y in ypositions:
 
@@ -899,8 +903,8 @@ def map_with_predict(sample_id):  # use fitted surface
                 ideal_refl = np.divide(counts, ref_counts)
                 true_refl = np.divide(ideal_refl, reflectance_Al_sample)
                 plt.plot(ref_nm, true_refl)
-                h_predict=plakne([x,y],abc[0],abc[1],abc[2])
-                print (f"h_predict = {h_predict}")
+                h_predict = plakne([x, y], abc[0], abc[1], abc[2])
+                print(f"h_predict = {h_predict}")
 
                 p_guess = (h_predict, norm)
                 popt, pcov = curve_fit(
@@ -1006,8 +1010,6 @@ def plot_map3D_first_refit(sample_id):
     plt.close()
 
 
-
-
 def plot_map3D_second_refit(sample_id):
     global figno
     db.cur.execute(f"""
@@ -1075,7 +1077,6 @@ def plot_map3D_second_refit(sample_id):
     figno += 1
     plt.savefig(f"{OUTFOLDER}/{figno}{sample_id[17:20]}_surf2d.pdf", dpi=300)
     plt.close()
-
 
 
 def fit_area_secundo(sample_id):
@@ -1326,9 +1327,9 @@ def map_with_second_predict(sample_id):  # use fitted surface
     db.cur.execute(f"""SELECT   {c.COL_A},{c.COL_B},{c.COL_C}
             FROM {c.SECOND_FIT_TABLE}
             WHERE {c.COL_SAMPLE_ID} = ?
-            """,[sample_id])
-    abc=db.cur.fetchone()
-    print (abc)
+            """, [sample_id])
+    abc = db.cur.fetchone()
+    print(abc)
 
     for y in ypositions:
 
@@ -1352,8 +1353,8 @@ def map_with_second_predict(sample_id):  # use fitted surface
                 ideal_refl = np.divide(counts, ref_counts)
                 true_refl = np.divide(ideal_refl, reflectance_Al_sample)
                 plt.plot(ref_nm, true_refl)
-                h_predict=plakne([x,y],abc[0],abc[1],abc[2])
-                print (f"h_predict = {h_predict}")
+                h_predict = plakne([x, y], abc[0], abc[1], abc[2])
+                print(f"h_predict = {h_predict}")
 
                 p_guess = (h_predict, norm)
                 popt, pcov = curve_fit(
@@ -1389,3 +1390,264 @@ def map_with_second_predict(sample_id):  # use fitted surface
                 print(results)
                 raise Exception("rezults len no 1")
 
+
+def plot_map3D_third_refit(sample_id):
+    global figno
+    db.cur.execute(f"""
+        SELECT DISTINCT {c.COL_YPOS}
+        FROM {c.SECOND_MAP_TABLE}
+        WHERE   {c.COL_SAMPLE_ID} = ?
+        AND {c.COL_YPOS} IS NOT NULL
+        ORDER BY {c.COL_YPOS} DESC""", [sample_id])
+    ypositions = []
+    for y_rez in db.cur.fetchall():
+        ypositions.append(y_rez[0])
+
+    db.cur.execute(f"""
+        SELECT DISTINCT {c.COL_XPOS}
+        FROM {c.SECOND_MAP_TABLE}
+        WHERE   {c.COL_SAMPLE_ID} = ?
+        AND {c.COL_XPOS} IS NOT NULL
+        ORDER BY {c.COL_XPOS} """, [sample_id])
+    xpositions = []
+    for x_rez in db.cur.fetchall():
+        xpositions.append(x_rez[0])
+
+    x, y = np.meshgrid(xpositions, ypositions, indexing='xy')
+    H = np.zeros_like(x)
+    for iy in range(len(ypositions)):
+        db.cur.execute(
+            f"""SELECT {c.COL_HPAA} from {c.SECOND_MAP_TABLE}
+            WHERE {c.COL_YPOS} =?
+            AND {c.COL_SAMPLE_ID}=?
+            ORDER BY {c.COL_XPOS}""", (ypositions[iy], sample_id))  # WHERE {c.COL_ASC_FILE} IS NULL ORDER BY {c.COL_TSTAMP} LIMIT 10")
+        results = db.cur.fetchall()
+        if (len(results) == len(xpositions)):
+            for ix in range(len(xpositions)):
+
+                # print(results)
+                H[iy][ix] = results[ix][0]
+
+        else:
+            raise Exception("FAIL IX IY")
+
+    fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+
+    surf = ax.plot_surface(x, y, H, cmap=cm.plasma,
+                           linewidth=0, antialiased=False)
+    ax.view_init(20, 20)
+#    ax.set_zlim(100, 1000)
+
+    ax.set_xlabel('x, um')
+    ax.set_ylabel('y, um')
+    ax.set_zlabel('z, nm')
+    plt.title('FixFit '+sample_id)
+    figno += 1
+    plt.savefig(f"{OUTFOLDER}/{figno}{sample_id[17:20]}_surf3D.pdf", dpi=300)
+    # plt.show()
+    plt.close()
+    plt.pcolormesh(x, y, H, cmap=cm.plasma)
+    xlims = secondarea[sample_id]['x']
+    ylims = secondarea[sample_id]['y']
+
+    plt.plot([xlims[0], xlims[1], xlims[1], xlims[0], xlims[0]],
+             [ylims[0], ylims[0], ylims[1], ylims[1], ylims[0]], 'y')
+    # plt.axis(limits)
+    plt.colorbar()
+    plt.title('FixFit '+sample_id)
+    figno += 1
+    plt.savefig(f"{OUTFOLDER}/{figno}{sample_id[17:20]}_surf2d.pdf", dpi=300)
+    plt.close()
+
+
+def final_report(sample_id):
+    global figno
+
+    db.cur.execute(f"""CREATE TABLE IF NOT EXISTS {c.FINAL_FIT_TABLE}(
+            {c.COL_SAMPLE_ID} TEXT PRIMARY KEY,
+            {c.COL_A} FLOAT,
+            {c.COL_B} FLOAT,
+            {c.COL_C} FLOAT
+            )""")
+
+    db.cur.execute(f"""
+        SELECT DISTINCT {c.COL_YPOS}
+        FROM {c.SECOND_MAP_TABLE}
+        WHERE   {c.COL_SAMPLE_ID} = ?
+        AND {c.COL_YPOS} IS NOT NULL
+        ORDER BY {c.COL_YPOS} DESC""", [sample_id])
+    ypositions = []
+    for y_rez in db.cur.fetchall():
+        ypositions.append(y_rez[0])
+    # print(ypositions)
+    db.cur.execute(f"""
+        SELECT DISTINCT {c.COL_XPOS}
+        FROM {c.SECOND_MAP_TABLE}
+        WHERE   {c.COL_SAMPLE_ID} = ?
+        AND {c.COL_XPOS} IS NOT NULL
+        ORDER BY {c.COL_XPOS} """, [sample_id])
+    xpositions = []
+    for x_rez in db.cur.fetchall():
+        xpositions.append(x_rez[0])
+
+    x, y = np.meshgrid(xpositions, ypositions, indexing='xy')
+    H = np.zeros_like(x, 'float')
+    for iy in range(len(ypositions)):
+        db.cur.execute(
+            f"""SELECT {c.COL_HPAA} from {c.SECOND_MAP_TABLE}
+            WHERE {c.COL_YPOS} =?
+            AND {c.COL_SAMPLE_ID}=?
+            ORDER BY {c.COL_XPOS}""", (ypositions[iy], sample_id))  # WHERE {c.COL_ASC_FILE} IS NULL ORDER BY {c.COL_TSTAMP} LIMIT 10")
+        results = db.cur.fetchall()
+        if (len(results) == len(xpositions)):
+            for ix in range(len(xpositions)):
+
+                # print(results)
+                H[iy][ix] = results[ix][0]
+
+        else:
+            raise Exception("FAIL IX IY")
+    # print(H)
+    fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+
+    surf = ax.plot_surface(x, y, H, cmap=cm.plasma,
+                           linewidth=0, antialiased=False)
+    ax.view_init(20, 20)
+#    ax.set_zlim(100, 1000)
+
+    ax.set_xlabel('x, um')
+    ax.set_ylabel('y, um')
+    ax.set_zlabel('z, nm')
+    plt.title('FixFit '+sample_id)
+    figno += 1
+    plt.savefig(f"{OUTFOLDER}/{figno}{sample_id[17:20]}_surf3D.pdf", dpi=300)
+    # plt.show()
+    plt.close()
+
+    # https://gist.github.com/silgon/24b56f8ae857ff4ab397
+    size = x.shape
+    x1_1d = x.reshape((1, np.prod(size)))
+    x2_1d = y.reshape((1, np.prod(size)))
+
+    xdata = np.vstack((x1_1d, x2_1d))
+    ydata = np.array(H).reshape(np.prod(size))
+    print(xdata.shape)
+    print(ydata.shape)
+
+#    ydata = H.reshape(size)
+    popt, pcov = curve_fit(plakne, xdata, ydata)
+    print(popt)
+    db.cur.execute(f"""REPLACE  INTO {c.FINAL_FIT_TABLE}
+        ({c.COL_SAMPLE_ID}, {c.COL_A}, {c.COL_B}, {c.COL_C})
+        VALUES (?,?,?,?)""",
+                   [sample_id, popt[0], popt[1], popt[2]])
+
+    h_fit = plakne(xdata, *popt)
+
+    H_fit = h_fit.reshape(size)
+
+    fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+
+    #formt = '%.5e'
+    np.savetxt(f"{OUTFOLDER}/{sample_id[17:20]}_h.dat", H, delimiter="\t")
+    np.savetxt(f"{OUTFOLDER}/{sample_id[17:20]}_x.dat", x, delimiter="\t")
+    np.savetxt(f"{OUTFOLDER}/{sample_id[17:20]}_y.dat", y, delimiter="\t")
+    np.savetxt(f"{OUTFOLDER}/{sample_id[17:20]}_abc.dat", popt, delimiter="\t")
+
+    ax.plot_surface(x, y, H, cmap=cm.plasma,
+                    linewidth=0, antialiased=False)
+    surf = ax.plot_surface(x, y, H_fit, cmap=cm.plasma,
+                           linewidth=0, antialiased=False)
+    ax.set_xlabel('x, um')
+    ax.set_ylabel('y, um')
+    ax.set_zlabel('z, nm')
+    plt.title('AreaFit '+sample_id)
+
+    ax.view_init(20, 20)
+#    plt.show()
+    figno += 1
+    plt.savefig(f"{OUTFOLDER}/{figno}{sample_id[17:20]}_surf3D.pdf", dpi=300)
+    # plt.show()
+    plt.close()
+
+    print(sample_id)
+
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
+    figno += 1
+    ax4.pcolormesh(x, y, H, cmap=cm.plasma)
+
+    for member_file_name in zip.zf.namelist():
+        if '.jpg' in member_file_name and sample_id in member_file_name:
+            zimg = zip.zf.read(member_file_name)
+            tmp_jpg_file_name = "tmp_img.jpg"
+            with open(tmp_jpg_file_name, "wb") as tmpjpgfile:
+                tmpjpgfile.write(zimg)
+            original_jpg = mpimg.imread(tmp_jpg_file_name)
+            if 'up_left' in member_file_name:
+                ax1.imshow(original_jpg)
+            elif 'up_right' in member_file_name:
+                ax2.imshow(original_jpg)
+            elif 'lower_left' in member_file_name or 'low_left_corner' in member_file_name:
+                ax3.imshow(original_jpg)
+
+            print(f"## JPG = {member_file_name}")
+
+        elif 'sturi.txt' in member_file_name and sample_id in member_file_name:
+            print(f"##CORNER = {member_file_name}")
+            file_contents = zip.zf.read(member_file_name)
+            corner_lines = file_contents.decode().splitlines()
+            for corner_line in corner_lines:
+                print(corner_line)
+                if 'upper left' in corner_line:
+                    ax1.set(title=corner_line)
+                elif 'upper right' in corner_line:
+                    ax2.set(title=corner_line)
+                elif 'lower left' in corner_line:
+                    ax3.set(title=corner_line)
+
+    for ax_img in [ax1, ax2, ax3]:
+        ax_img.axis('off')
+    plt.tight_layout()
+    plt.savefig(f"{OUTFOLDER}/{figno}{sample_id[17:20]}corner.pdf", dpi=300)
+    # plt.show()
+    plt.close()
+    if sample_id == 'PAAOgrad_100-1000_wide':
+        anchors_zip_filename = '../Poly_grad_1000_widen_NaCl/data_in/14.02.23.zip'
+    elif sample_id == 'PAAOgrad_100-1000_no_wide':
+        anchors_zip_filename = '../Poly_grad_1000_NaCl/08.02.23_Poly_grad_1000_NaCl.zip'
+
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2)
+    figno += 1
+    with zipfile.ZipFile(anchors_zip_filename, "r") as anchors_zf:
+        for anc_file_name in anchors_zf.namelist():
+            if '.jpg' in anc_file_name and 'anchors/anchor' in anc_file_name:
+                print(anc_file_name)
+                zimg = anchors_zf.read(anc_file_name)
+                with open(tmp_jpg_file_name, "wb") as tmpjpgfile:
+                    tmpjpgfile.write(zimg)
+                original_jpg = mpimg.imread(tmp_jpg_file_name)
+                if 'anchor1.jpg' in anc_file_name:
+                    ax2.imshow(original_jpg)
+                if 'anchor2.jpg' in anc_file_name:
+                    ax1.imshow(original_jpg)
+                if 'anchor3.jpg' in anc_file_name:
+                    ax3.imshow(original_jpg)
+
+            anc_order = [ax2, ax1, ax3]
+            if 'session.json' in anc_file_name:
+                print(anc_file_name)
+                with anchors_zf.open(anc_file_name) as session_jsf:
+                    session_json_object = json.load(session_jsf)
+                print(session_json_object.keys())
+
+                for anc_n in range(3):
+                    anc = session_json_object['anchors'][anc_n]
+                    print(anc)
+                    anc_order[anc_n].set(title=f"'anc {anc_n+1} '{anc}")
+
+    for ax_img in [ax1, ax2, ax3, ax4]:
+        ax_img.axis('off')
+    plt.tight_layout()
+    plt.savefig(f"{OUTFOLDER}/{figno}{sample_id[17:20]}corner.pdf", dpi=300)
+    # plt.show()
+    plt.close()
